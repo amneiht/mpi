@@ -15,7 +15,7 @@ void kmean(int id, int size);
 void kmaster(int **l, int n, int max, int size, int tam);
 void update(int**cs, int**s, int h, long**al, int**st);
 int readfile(int **ng, int *lg, int *mx);
-int tammoi(int tam, int **mt, long **al, int**st);
+int tammoi(int tam, int **mt, long **al, int**st, int a);
 void kslave(int id, int size);
 
 int main(int argc, char** argv) {
@@ -31,7 +31,7 @@ void kmean(int id, int size) {
 	if (id == 0) {
 		int *mg;
 		int len, max;
-		int tam = 5;
+		int tam = 36;
 		int err = readfile(&mg, &len, &max);
 		if (err == -1) {
 			MPI_Bcast(&err, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -62,18 +62,27 @@ void kmaster(int **l, int n, int max, int size, int tam) {
 	sd[0] = -1; // ket thuc
 	MPI_Send(&sd, 2, MPI_INT, 1, 42, MPI_COMM_WORLD);
 
-	printf("id %d co %d phan tu \n",id,p);
+	printf("id %d co %d phan tu \n", id, p);
 	int h; // kich thuoc mang moi
 	int *csort = thongke(&sort, p, &h); // x,y, sl
 	int *mtam = kt(max, tam); //x,y
 	MPI_Bcast(&tam, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(mtam, tam * 2, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
+//	int tkd = 0;
+//	for (int i = 0; i < h; i++) {
+//		tkd = tkd + csort[i * 3 + 2];
+//		//printf("%d %d %d \n", csort[i * 3], csort[i * 3 + 1], csort[i * 3 + 2]);
+//	}
+//	printf("id %d loi%d\n", id, p - tkd);
 	int* sl = (int*) malloc(h * sizeof(int)); // chi so tam cum
 	int *stam = (int*) malloc(tam * sizeof(int)); // so luong moi tam
 	long *all = (long*) malloc(tam * 2 * sizeof(long));
 	long *nhan = (long*) malloc(tam * 2 * sizeof(long)); // nhan tong so tam
 	int *nhansl = (int*) malloc(tam * sizeof(int)); // nhan so luong tam
 
+	int dem = n; // (int)  sqrt(tam*n);
+//	int sdmin = ((int) sqrt(max));
 	while (1) {
 		for (int i = 0; i < tam * 2; i++) {
 			all[i] = 0; // reset du lieu
@@ -107,13 +116,20 @@ void kmaster(int **l, int n, int max, int size, int tam) {
 				stam[i] = stam[i] + nhansl[i];
 			}
 		}
-		int cm = tammoi(tam, &mtam, &all, &stam);
-		MPI_Bcast(mtam, tam * 2, MPI_INT, 0, MPI_COMM_WORLD);
-		if (cm == 0)
+		dem--;
+		int cm = tammoi(tam, &mtam, &all, &stam, dem);
+		if (cm == 1)
+			MPI_Bcast(mtam, tam * 2, MPI_INT, 0, MPI_COMM_WORLD);
+		if (cm == 0) {
+			int res[tam * 2];
+			res[0] = -1;
+			MPI_Bcast(&res, tam * 2, MPI_INT, 0, MPI_COMM_WORLD);
 			break;
+		}
 		//printf("cmn \n");
 	}
-	//printf("%d\n", size);
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("so vong %d\n", n-dem);
 	int ma = 0, m = h;
 	if (1 < size) {
 		MPI_Recv(&ma, 1, MPI_INT, 1, MPI_ANY_TAG,
@@ -134,17 +150,22 @@ void kmaster(int **l, int n, int max, int size, int tam) {
 		csort[3 * i + 2] = sl[i];
 	}
 //	 tao tep
-
+	MPI_Barrier(MPI_COMM_WORLD);
 	FILE *fl;
 	fl = fopen("/home/amneiht/Desktop/anh/data3", "w");
 	if (fl != NULL) {
 		fprintf(fl, "1 %d %d\n", n, max);
+		fprintf(fl, "%d\n", tam);
+		for (int i = 0; i < tam; i++) {
+			fprintf(fl, "%d %d\n", mtam[i * 2], mtam[i * 2 + 1]);
+		}
 		for (int i = 0; i < h; i++) {
+
 			fprintf(fl, "%d %d %d\n", csort[i * 3], csort[i * 3 + 1],
 					csort[3 * i + 2]);
 		}
 
-		int* mghi = (int*) malloc(m * 3 * sizeof(int));// gia tri lon nnhat
+		int* mghi = (int*) malloc(m * 3 * sizeof(int)); // gia tri lon nnhat
 
 		for (int j = 1; j < size; j++) {
 			MPI_Recv(&ma, 1, MPI_INT, j, MPI_ANY_TAG, MPI_COMM_WORLD,
@@ -152,8 +173,8 @@ void kmaster(int **l, int n, int max, int size, int tam) {
 			MPI_Recv(mghi, ma * 3, MPI_INT, j, MPI_ANY_TAG, MPI_COMM_WORLD,
 			MPI_STATUS_IGNORE);
 			for (int i = 0; i < ma; i++) {
-				fprintf(fl, "%d %d %d\n", csort[i * 3], csort[i * 3 + 1],
-						csort[3 * i + 2]);
+				fprintf(fl, "%d %d %d\n", mghi[i * 3], mghi[i * 3 + 1],
+						mghi[3 * i + 2]);
 			}
 		}
 		free(mghi);
@@ -178,7 +199,7 @@ void kslave(int id, int size) {
 	int sd[2];
 	int *sort = (int*) malloc(sizeof(int) * p * 2);
 	fill(&sort, p * 2, -1);
-	printf("id %d co %d phan tu \n",id,p);
+	//printf("id %d co %d phan tu \n",id,p);
 	while (1) {
 		MPI_Recv(&sd, 2, MPI_INT, id - 1, MPI_ANY_TAG, MPI_COMM_WORLD,
 		MPI_STATUS_IGNORE);
@@ -192,20 +213,29 @@ void kslave(int id, int size) {
 		if (l == 1)
 			MPI_Send(&sd, 2, MPI_INT, id + 1, 42, MPI_COMM_WORLD);
 	}
+
 	int tam;
 	MPI_Bcast(&tam, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	int *mtam = (int*) malloc(2 * tam * sizeof(int));
 	MPI_Bcast(mtam, tam * 2, MPI_INT, 0, MPI_COMM_WORLD);
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	int h; // kich thuoc mang moi
 	int *csort = thongke(&sort, p, &h); // x,y, sl
+
+//	int tkd = 0;
+//	for (int i = 0; i < h; i++) {
+//		tkd = tkd + csort[i * 3 + 2];
+//		//printf("%d %d %d \n", csort[i * 3], csort[i * 3 + 1], csort[i * 3 + 2]);
+//	}
+//	printf("id %d loi%d\n", id, p - tkd);
+
 	int* sl = (int*) malloc(h * sizeof(int)); // chi so tam cum
 	int *stam = (int*) malloc(tam * sizeof(int)); // so luong moi tam
 	long *all = (long*) malloc(tam * 2 * sizeof(long));
 	long *nhan = (long*) malloc(tam * 2 * sizeof(long)); // nhan tong so tam
 	int *nhansl = (int*) malloc(tam * sizeof(int)); // nhan so luong tam
 //	printf("cmn");
-//
 	while (1) {
 		for (int i = 0; i < tam * 2; i++) {
 			all[i] = 0; // reset du lieu
@@ -213,6 +243,13 @@ void kslave(int id, int size) {
 		fill(&stam, tam, 0);
 		center(&csort, &sl, h, &mtam, tam);
 		update(&csort, &sl, h, &all, &stam);
+
+//		int demt=0;
+//		for(int i=0;i<h;i++)
+//		{
+//			if(sl[i]<0||sl[i]>=tam) printf("cmn");
+//		}
+//		if(demt!=p)printf("id %d loi so luong %d\n", id, demt);
 
 		if (id * 2 + 1 < size) {
 			//printf("id %d nhan tu %d\n", id, 2 * id + 1);
@@ -248,6 +285,7 @@ void kslave(int id, int size) {
 			break;
 	}
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	// lay max gia tri
 	int ma = 0, m = h;
 	if (id * 2 + 1 < size) {
@@ -270,6 +308,7 @@ void kslave(int id, int size) {
 			{
 		csort[3 * i + 2] = sl[i];
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	MPI_Send(&h, 1, MPI_INT, 0, 42, MPI_COMM_WORLD);
 	MPI_Send(csort, h * 3, MPI_INT, 0, 42, MPI_COMM_WORLD);
@@ -286,13 +325,15 @@ void kslave(int id, int size) {
 /**
  * tinh so tam moi
  */
-int tammoi(int tam, int **mt, long **al, int**st) {
+int tammoi(int tam, int **mt, long **al, int**st, int a) {
 	int check = 0;
 	int *mtam = *mt;
 	long*all = *al;
 	int *stam = *st;
 	long px, py;
+	int tg = 0;
 	for (int i = 0; i < tam; i++) {
+		tg = tg + stam[i];
 		if (stam[i] != 0) {
 
 			px = all[i * 2] / stam[i];
@@ -307,15 +348,16 @@ int tammoi(int tam, int **mt, long **al, int**st) {
 			}
 		}
 	}
-//	for (int i = 0; i < tam; i++)
-//	{
+	if (a < 0)
+		check = 0;
+
+//	for (int i = 0; i < tam; i++) {
 //
-//		printf("mt[i * 2] :%d mt[i * 2+ 1] %d %d\n",mtam[i * 2],
-//				mtam[i * 2 + 1],stam[i]);
+//		printf("mt[i * 2] :%d mt[i * 2+ 1] %d %d\n", mtam[i * 2],
+//				mtam[i * 2 + 1], stam[i]);
 //
 //	}
-	if (check == 0)
-		mtam[0] = -1;
+//	printf("tg: %d \n", tg);
 	return check;
 }
 /**
@@ -326,12 +368,15 @@ void update(int**cs, int**s, int h, long**al, int**st) {
 	int *sl = *s;
 	long *all = *al;
 	int *stam = *st;
+	int m = 0;
 	for (int i = 0; i < h; i++) {
-		int m = sl[i];
-		all[2 * m] = all[2 * m] + csort[3 * m] * csort[3 * m + 2];
-		all[2 * m + 1] = all[2 * m + 1] + csort[3 * m + 1] * csort[3 * m + 2];
-		stam[m] = stam[m] + csort[3 * m + 2];
+		m = sl[i];
+		stam[m] = stam[m] + csort[3 * i + 2];
+		all[2 * m] = all[2 * m] + csort[3 * i] * csort[3 * i + 2];
+		all[2 * m + 1] = all[2 * m + 1] + csort[3 * i + 1] * csort[3 * i + 2];
+
 	}
+
 }
 /**
  * tinh khoang cach gia cac tam
@@ -384,7 +429,7 @@ int* thongke(int **sd, int p, int *z) {
 		}
 	}
 	cs[d * 3 + 2] = sl; // gan phan tu cuoi
-	cs = (int*) realloc(cs, (d + 1) * 3 * sizeof(int));
+	//cs = (int*) realloc(cs, (d + 1) * 3 * sizeof(int));
 	*z = d + 1;
 	return cs;
 }
