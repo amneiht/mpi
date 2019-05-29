@@ -11,7 +11,7 @@ int* thongke(int **sd, int p, int *z);
 int* kt(int max, int tam);
 void fill(int **m, int p, int k);
 void center(int **cs, int** s, int n, int **mt, int tam);
-void kmean(int id, int size);
+void kmean(int id, int size,int tam);
 void kmaster(int **l, int n, int max, int size, int tam);
 void update(int**cs, int**s, int h, long**al, int**st);
 int readfile(int **ng, int *lg, int *mx);
@@ -23,15 +23,15 @@ int main(int argc, char** argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &id); //what rank is the current processor
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	kmean(id, size);
+	kmean(id, size,4);
 	MPI_Finalize();
 	return 0;
 }
-void kmean(int id, int size) {
+void kmean(int id, int size,int tam) {
 	if (id == 0) {
 		int *mg;
 		int len, max;
-		int tam = 36;
+		//int tam = 7;
 		int err = readfile(&mg, &len, &max);
 		if (err == -1) {
 			MPI_Bcast(&err, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -149,10 +149,10 @@ void kmaster(int **l, int n, int max, int size, int tam) {
 			{
 		csort[3 * i + 2] = sl[i];
 	}
-//	 tao tep
+//	 tao tep /home/amneiht/Desktop/anh/
 	MPI_Barrier(MPI_COMM_WORLD);
 	FILE *fl;
-	fl = fopen("/home/amneiht/Desktop/anh/data3", "w");
+	fl = fopen("data3", "w");
 	if (fl != NULL) {
 		fprintf(fl, "1 %d %d\n", n, max);
 		fprintf(fl, "%d\n", tam);
@@ -199,7 +199,7 @@ void kslave(int id, int size) {
 	int sd[2];
 	int *sort = (int*) malloc(sizeof(int) * p * 2);
 	fill(&sort, p * 2, -1);
-	//printf("id %d co %d phan tu \n",id,p);
+	printf("id %d co %d phan tu \n",id,p);
 	while (1) {
 		MPI_Recv(&sd, 2, MPI_INT, id - 1, MPI_ANY_TAG, MPI_COMM_WORLD,
 		MPI_STATUS_IGNORE);
@@ -438,7 +438,6 @@ int* thongke(int **sd, int p, int *z) {
  */
 void fill(int **m, int p, int k) {
 	int *mg = *m;
-//p = 2 * p;
 	for (int i = 0; i < p; i++)
 		mg[i] = k;
 }
@@ -487,7 +486,8 @@ int check(int **so, int **ps, int p) {
 //ok
 int readfile(int **ng, int *lg, int *mx) {
 	FILE *fl;
-	fl = fopen("/home/amneiht/Desktop/anh/data", "r");
+	///home/amneiht/Desktop/anh/
+	fl = fopen("data", "r");
 	if (fl == NULL)
 		return -1;
 	int mode, leng, max;
